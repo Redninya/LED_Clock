@@ -1,5 +1,4 @@
 void hrs1() {
-
   switch (hrs / 10) {
     case 0: zero();
       break;
@@ -25,7 +24,6 @@ void hrs1() {
 }
 
 void hrs2() {
-
   switch (hrs % 10) {
     case 0: zero();
       break;
@@ -51,7 +49,6 @@ void hrs2() {
 }
 
 void mins1() {
-
   switch (mins / 10) {
     case 0: zero();
       break;
@@ -77,7 +74,6 @@ void mins1() {
 }
 
 void mins2() {
-
   switch (mins % 10) {
     case 0: zero();
       break;

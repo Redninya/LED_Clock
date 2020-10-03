@@ -28,6 +28,7 @@
    - в режиме плавной смены цвета и вращении энкодера меняется скорость плавной смены цветов
    - в режиме радуги и вращении энкодера меняется шаг цвета
    - в режиме радуги и вращении зажатого энкодера меняется скорость радуги
+   - в режиме белого цвета, нет настроек
 
 */
 
@@ -44,18 +45,29 @@
 
 
 // пины энкодера
-#define CLK 4   // жилательно не менять пины энка, потому что он сделан через прерывания
+#define CLK 4
 #define DT 3
 #define SW 2
 
 #define TYPE 2   // тип энкодера TYPE1 одношаговый, TYPE2 двухшаговый. Если ваш энкодер работает странно, смените тип
 
 
-#define COLOR_MODE 1    // расцветка цыфр (0 - один цвет (COLOR); 1 - плавная смена цвета; 2 - радуга, каждая цыфра своим цветом); (можно настроить с энкодера)
+#define PHOTO_PIN A0  // пин фоторезистора
+
+
+#define AUTO_BRIGHT 1        // автоматическая подстройка яркости от уровня внешнего освещения (1 - включить, 0 - выключить)
+#define MAX_BRIGHT 255       // максимальная яркость (0 - 255)
+#define MIN_BRIGHT 25        // минимальная яркость (0 - 255)
+#define BRIGHT_CONSTANT 1000  // константа усиления от внешнего света (0 - 1023)
+// чем МЕНЬШЕ константа, тем "резче" будет прибавляться яркость
+#define COEF 0.8             // коэффициент фильтра (0.0 - 1.0), чем больше - тем медленнее меняется яркость
+
+#define COLOR_MODE 0    // расцветка цыфр (0 - один цвет (COLOR); 1 - плавная смена цвета; 2 - радуга, каждая цыфра своим цветом; 3 - все цыфры белые;) (можно настроить с энкодера)
 #define COLOR 80        // цвет по HSV (0 - 255); (можно настроить с энкодера)
 #define SPEED 25        // скорость смены цвета в милисекундах; (можно настроить с энкодера)
 #define COLOR_STEP 0    // шаг цвета в режиме радуги (чем больше, тем более разными цветами будет гореть цыфры); (можно настроить с энкодера)
 #define RAINBOW_TIME 80 // время смены цвета в режиме радуги; (можно настроить с энкодера)
+#define EFFECT_AMOUNT 3 // количество режимов
 
 
 //========================= ДЛЯ РАЗРОБОТЧИКОВ =================================
@@ -79,6 +91,7 @@ byte spd = SPEED;
 byte bright = BRIGHTNESS;
 byte colStep = COLOR_STEP;
 byte rainSet = RAINBOW_TIME;
+byte effect_amount = EFFECT_AMOUNT;
 
 byte loc;
 byte pos;
@@ -94,6 +107,9 @@ boolean setting;
 
 unsigned long colTime;
 unsigned long rainTime;
+unsigned long bright_timer;
+
+int new_bright, new_bright_f;
 
 int hrs;
 int mins;
@@ -102,9 +118,6 @@ int newHrs;
 int newMins;
 
 void setup() {
-
-  Serial.begin(9600);
-
 
 #if (TYPE == 1)
   enc.setType(TYPE1);
@@ -115,79 +128,27 @@ void setup() {
 #endif
 
 
-  attachInterrupt(0, isrCLK, CHANGE);    // прерывание на 2 пине! CLK у энка
-  attachInterrupt(1, isrDT, CHANGE);    // прерывание на 3 пине! DT у энка
-
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, SEGMENT_LEDS * 7 * 4).setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(bright);
-
-
 
   rtc.begin();
 
   if (rtc.lostPower()) {  //  при потере питания
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));  // установить время компиляции
   }
-
 }
-
-void isrCLK() {
-  enc.tick();  // отработка в прерывании
-}
-void isrDT() {
-  enc.tick();  // отработка в прерывании
-}
-
 
 void loop() {
 
-  // обозначение времени
-  DateTime now = rtc.now();
-  hrs = now.hour();
-  mins = now.minute();
-
+  writeTime();
+  timeWork();
   enc.tick();
 
-  Serial.println(rainSet);
-
-  // ход времини
-  if (mins > 59) {
-    mins = 0;
-    hrs++;
-  }
-  if (mins < 0) {
-    mins = 59;
-    hrs--;
-  }
-  if (hrs > 23) {
-    hrs = 0;
-  }
-  if (hrs < 0) {
-    hrs = 23;
-  }
-
-  if (newMins > 59) {
-    newMins = 0;
-    newHrs++;
-  }
-  if (newMins < 0) {
-    newMins = 59;
-    newHrs--;
-  }
-  if (newHrs > 23) {
-    newHrs = 0;
-  }
-  if (newHrs < 0) {
-    newHrs = 23;
-  }
-
-
-
-  if (col_mode == 1) {
-    colors();
-  }
-  else if (col_mode == 2) {
-    rainbow();
+  switch (col_mode) {
+    case 1: colors();
+      break;
+    case 2: rainbow();
+      break;
   }
 
 
@@ -227,5 +188,45 @@ void loop() {
 
   if (loc > 4) {
     loc = 0;
+  }
+}
+
+void writeTime() {
+  // обозначение времени
+  DateTime now = rtc.now();
+  hrs = now.hour();
+  mins = now.minute();
+}
+
+void timeWork() {
+  // ход времини
+  if (mins > 59) {
+    mins = 0;
+    hrs++;
+  }
+  if (mins < 0) {
+    mins = 59;
+    hrs--;
+  }
+  if (hrs > 23) {
+    hrs = 0;
+  }
+  if (hrs < 0) {
+    hrs = 23;
+  }
+
+  if (newMins > 59) {
+    newMins = 0;
+    newHrs++;
+  }
+  if (newMins < 0) {
+    newMins = 59;
+    newHrs--;
+  }
+  if (newHrs > 23) {
+    newHrs = 0;
+  }
+  if (newHrs < 0) {
+    newHrs = 23;
   }
 }

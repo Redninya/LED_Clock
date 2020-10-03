@@ -1,4 +1,3 @@
-
 // режим плавной смены цвета
 void colors() {
   if (millis() - colTime > spd) {
@@ -10,7 +9,7 @@ void colors() {
 // режим радуги
 void rainbow() {
   if (millis() - rainTime > rainSet) {
-    col1 += 3;
+    col1 += 2;
     rainTime = millis();
   }
   col2 = col1 + 30 + colStep;

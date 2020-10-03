@@ -61,7 +61,7 @@ void sett() {
 
   if (enc.isSingle()) {
     col_mode++;
-    if (col_mode > 2) {
+    if (col_mode > effect_amount) {
       col_mode = 0;
     }
   }
@@ -69,11 +69,23 @@ void sett() {
 
 void brght() {
   // настройка яркости
-  if (enc.isRight()) {
-    bright += 10;
+  if (AUTO_BRIGHT) {                         // если включена адаптивная яркость
+    if (millis() - bright_timer > 100) {     // каждые 100 мс
+      bright_timer = millis();               // сброить таймер
+      new_bright = map(analogRead(PHOTO_PIN), 0, BRIGHT_CONSTANT, MIN_BRIGHT, MAX_BRIGHT);   // считать показания с фоторезистора, перевести диапазон
+      new_bright = constrain(new_bright, MIN_BRIGHT, MAX_BRIGHT);
+      bright = bright * COEF + new_bright * (1 - COEF);
+      FastLED.setBrightness(bright);      // установить новую яркость
+    }
   }
-  if (enc.isLeft()) {
-    bright -= 10;
+
+  else if (!AUTO_BRIGHT) {
+    if (enc.isRight()) {
+      bright += 10;
+    }
+    if (enc.isLeft()) {
+      bright -= 10;
+    }
+    FastLED.setBrightness(bright);
   }
-  FastLED.setBrightness(bright);
 }
